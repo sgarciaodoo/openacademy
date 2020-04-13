@@ -11,3 +11,4 @@ class Partner(models.Model):
 
 	session_ids = fields.Many2many('openacademy.session',
 		string="Attended Sessions", readonly=True)
+Partner()
