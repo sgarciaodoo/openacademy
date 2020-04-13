@@ -12,4 +12,3 @@ class Partner(models.Model):
         string="Attended Sessions", readonly=True)
 
 
-Partner()
