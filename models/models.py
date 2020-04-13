@@ -5,15 +5,29 @@ from odoo import models, fields, api, exceptions
 
 class Course(models.Model):
     _name = 'openacademy.course'
+    _description = "OpenAcademy Courses"
 
     name = fields.Char(string="Title", required=True)
     description = fields.Text()
 
     # Relaciones entre tablas
     responsible_id = fields.Many2one('res.users',
-                                     ondelete='set null', string="Responsable", index=True)
+        ondelete='set null', string="Responsible", index=True)
     session_ids = fields.One2many(
         'openacademy.session', 'course_id', string="Sessions")
+    @api.multi
+    def copy(self, default=None):
+        default = dict(default or {})
+
+        copied_count = self.search_count(
+            [('name', '=like', u"Copy of {}%".format(self.name))])
+        if not copied_count:
+            new_name = u"Copy of {}".format(self.name)
+        else:
+            new_name = u"Copy of {} ({})".format(self.name, copied_count)
+
+        default['name'] = new_name
+        return super(Course, self).copy(default)
 
     _sql_constraints = [
         ('name_description_check',
@@ -26,6 +40,7 @@ class Course(models.Model):
     ]
 class Session(models.Model):
     _name = 'openacademy.session'
+    _description = "OpenAcademy Sessions"
 
     name = fields.Char(required=True)
     start_date = fields.Date(default=fields.Date.today)
@@ -34,12 +49,15 @@ class Session(models.Model):
     seats = fields.Integer(string="Number of seats")
 
     active = fields.Boolean(default=True)
+    color = fields.Integer()
 	instructor_id = fields.Many2one('res.partner', string="Instructor",
         domain=['|', ('instructor', '=', True),
                      ('category_id.name', 'ilike', "Teacher")])
     course_id = fields.Many2one('openacademy.course',
         ondelete='cascade', string="Course", required=True)
     attendee_ids = fields.Many2many('res.partner', string="Attendees")
+    attendees_count = fields.Integer(
+        string="Attendees count", compute='_get_attendees_count', store=True)
     taken_seats = fields.Float(string="Taken seats", compute='_taken_seats')
     end_date = fields.Date(string="End Date", store=True,
         compute='_get_end_date', inverse='_set_end_date')
@@ -68,8 +86,6 @@ class Session(models.Model):
                 },
             }
 
-#     name = fields.Char()
-
     @api.depends('start_date', 'duration')
     def _get_end_date(self):
         for r in self:
@@ -97,12 +113,9 @@ class Session(models.Model):
         for r in self:
             if r.instructor_id and r.instructor_id in r.attendee_ids:
                 raise exceptions.ValidationError("A session's instructor can't be an attendee")
-class Partner(models.Model):
-    _inherit = 'res.partner'
 
-    # Add a new column to the res.partner model, by default partners are not
-    # instructors
-    instructor = fields.Boolean("Instructor", default=False)
+    @api.depends('attendee_ids')
+    def _get_attendees_count(self):
+        for r in self:
+            r.attendees_count = len(r.attendee_ids)
 
-    session_ids = fields.Many2many('openacademy.session',
-                                   string="Attended Sessions", readonly=True)
